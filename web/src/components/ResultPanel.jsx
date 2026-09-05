@@ -2,7 +2,7 @@
  * Result Panel Component
  * 
  * Displays all fields returned by the recognition service:
- * - text (recognized content)
+ * - text (recognized content) — now rendered with LaTeX
  * - provider (openai | gemini | null)
  * - degraded (boolean)
  * - has_math (boolean)
@@ -12,6 +12,9 @@
  * - _fileSizeKB (size)
  * - _usedContext (context used)
  */
+
+import { useState } from 'react';
+import { LatexRenderer } from './LatexRenderer';
 
 function Badge({ color, text, bgColor = null }) {
     const style = {
@@ -40,6 +43,9 @@ function ProviderBadge({ provider, degraded }) {
 }
 
 export default function ResultPanel({ result, truth }) {
+    // ── State ──
+    const [showRaw, setShowRaw] = useState(false);
+    
     if (!result) {
         return (
             <div style={{
@@ -60,7 +66,7 @@ export default function ResultPanel({ result, truth }) {
 
     return (
         <div style={{ marginTop: 16, border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
-            {/* Header / Badges */}
+            {/* ── Header / Badges ── */}
             <div style={{
                 padding: '12px 16px',
                 backgroundColor: '#f8f9fa',
@@ -91,33 +97,83 @@ export default function ResultPanel({ result, truth }) {
                 {result._fileSizeKB != null && (
                     <Badge bgColor="#555" text={`${result._fileSizeKB}KB`} />
                 )}
+                
+                {/* ── Raw/Rendered Toggle ──
+                {!illegible && result.has_math && (
+                    <button
+                        onClick={() => setShowRaw(!showRaw)}
+                        style={{
+                            marginLeft: 'auto',
+                            padding: '2px 12px',
+                            borderRadius: 4,
+                            border: '1px solid #6c757d',
+                            backgroundColor: '#fff',
+                            color: '#6c757d',
+                            cursor: 'pointer',
+                            fontSize: '0.75em',
+                            fontWeight: 500,
+                        }}
+                    >
+                        {showRaw ? 'Show Rendered' : 'Show Raw LaTeX'}
+                    </button>
+                )} */}
             </div>
 
-            {/* Body */}
+            {/* ── Body ── */}
             <div style={{ padding: '16px' }}>
-                {/* Recognized Text */}
+                {/* ── Recognized Text ── */}
                 <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6, fontSize: '0.9em', color: '#333' }}>
-                        Recognized Text
+                    <div style={{ 
+                        fontWeight: 600, 
+                        marginBottom: 6, 
+                        fontSize: '0.9em', 
+                        color: '#333',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}>
+                        <span>Recognized Text</span>
+                        {!illegible && result.has_math && (
+                            <span style={{ 
+                                fontSize: '0.7em', 
+                                color: '#888',
+                                fontWeight: 'normal',
+                            }}>
+                                {showRaw ? '📄 Raw LaTeX' : '📐 Rendered'}
+                            </span>
+                        )}
                     </div>
-                    <pre style={{
+                    
+                    <div style={{
                         backgroundColor: illegible ? '#f8f8f8' : '#f0f4f8',
                         padding: '12px',
                         borderRadius: 4,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        margin: 0,
-                        fontFamily: 'monospace',
-                        fontSize: '0.95em',
                         minHeight: '60px',
-                        color: illegible ? '#999' : '#222',
                         border: illegible ? '1px dashed #ccc' : '1px solid #e0e0e0',
+                        overflow: 'auto',
                     }}>
-                        {illegible ? '(empty → illegible)' : result.text}
-                    </pre>
+                        {illegible ? (
+                            <span style={{ color: '#999' }}>(empty → illegible)</span>
+                        ) : (
+                            <LatexRenderer 
+                                text={result.text}
+                                fontSize={result.has_math ? 20 : 16}
+                                displayMode={false}
+                                fallbackText={result.text}
+                                context={{
+                                    subject: result._usedContext?.subject || '',
+                                    has_math: result.has_math,
+                                    topic: result._usedContext?.topic || '',
+                                }}
+                                showRaw={showRaw}
+                                showToggle={false}
+                                renderInline={true}
+                            />
+                        )}
+                    </div>
                 </div>
 
-                {/* Status Message */}
+                {/* ── Status Message ── */}
                 {result.message && (
                     <div style={{
                         color: '#666',
@@ -131,7 +187,7 @@ export default function ResultPanel({ result, truth }) {
                     </div>
                 )}
 
-                {/* Context Used */}
+                {/* ── Context Used ── */}
                 {result._usedContext && (
                     <div style={{
                         fontSize: '0.8em',
@@ -149,7 +205,7 @@ export default function ResultPanel({ result, truth }) {
                     </div>
                 )}
 
-                {/* Ground Truth Comparison */}
+                {/* ── Ground Truth Comparison ── */}
                 {truth && truth.trim() && (
                     <div style={{
                         borderTop: '1px solid #eee',
@@ -175,7 +231,7 @@ export default function ResultPanel({ result, truth }) {
                         <div style={{ marginTop: 8, fontSize: '0.9em' }}>
                             <span style={{ fontWeight: 500 }}>Match:</span>{' '}
                             {exactMatch ? (
-                                <span style={{ color: '#2e7d32' }}>Exact match</span>
+                                <span style={{ color: '#2e7d32' }}> Exact match</span>
                             ) : (
                                 <span style={{ color: '#c0392b' }}> Differs</span>
                             )}
