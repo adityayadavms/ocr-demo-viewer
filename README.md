@@ -284,8 +284,8 @@ ocr-demo-viewer/
 
 1. **Upload an image** — drag & drop or click to select a PNG of handwriting.
 2. **Select a subject** — choose *Mathematics* for better math recognition.
-3. **Enter a topic** *(optional)* — e.g. `Quadratic equations`.
-4. **Enter a class** *(optional)* — e.g. `10`.
+3. **Enter a topic**  — e.g. `Quadratic equations`.
+4. **Enter a class**  — e.g. `10`.
 5. **Click "Recognize"** — results typically appear in 2–5 seconds.
 6. **Interpret the result badges:**
 
