@@ -1,17 +1,4 @@
-/**
- * OCR Demo Viewer - Main App
- * 
- * A single-page tool for demonstrating handwriting recognition.
- * 
- * Features:
- * - Upload PNG images (drag & drop or click)
- * - Context controls (subject, topic, class)
- * - Recognition results display
- * - Circuit breaker status and control
- * - Ground truth comparison
- */
-
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { recognize, getHealth } from './api';
 import Uploader from './components/Uploader';
 import ContextForm from './components/ContextForm';
@@ -32,19 +19,84 @@ function App() {
     const [loading, setLoading] = useState(false);
     const [healthLoading, setHealthLoading] = useState(false);
     const [error, setError] = useState('');
-
+    
+    // ── Validation state ──
+    const [touched, setTouched] = useState({
+        subject: false,
+        topic: false,
+        className: false,
+    });
+    
     // ── Computed ──
     const preview = useMemo(() => {
         if (!file) return null;
         return URL.createObjectURL(file);
     }, [file]);
 
+    // ── Validation functions ──
+    const validateField = useCallback((field, value) => {
+        if (!value || value.trim() === '') {
+            return `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
+        }
+        return '';
+    }, []);
+
+    const validateAll = useCallback(() => {
+        const errors = {
+            subject: validateField('subject', context.subject),
+            topic: validateField('topic', context.topic),
+            className: validateField('class', context.className),
+        };
+        
+        // Mark all as touched
+        setTouched({
+            subject: true,
+            topic: true,
+            className: true,
+        });
+        
+        return errors;
+    }, [context, validateField]);
+
+    const isFormValid = useCallback(() => {
+        return (
+            context.subject.trim() !== '' &&
+            context.topic.trim() !== '' &&
+            context.className.trim() !== ''
+        );
+    }, [context]);
+
     // ── Handlers ──
     const handleContextChange = (patch) => {
         setContext((prev) => ({ ...prev, ...patch }));
+        
+        // Mark field as touched when user interacts
+        Object.keys(patch).forEach((key) => {
+            if (!touched[key]) {
+                setTouched((prev) => ({ ...prev, [key]: true }));
+            }
+        });
     };
 
     const handleRecognize = async () => {
+        // ── Validate all fields ──
+        const errors = validateAll();
+        const hasErrors = Object.values(errors).some((err) => err !== '');
+        
+        if (hasErrors) {
+            setError('Please fill in all required fields');
+            // Scroll to the first error
+            const firstErrorField = Object.keys(errors).find((key) => errors[key] !== '');
+            if (firstErrorField) {
+                const element = document.querySelector(`[name="${firstErrorField}"]`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    element.focus();
+                }
+            }
+            return;
+        }
+        
         if (!file) {
             setError('Please select an image first');
             return;
@@ -94,6 +146,15 @@ function App() {
         }
     };
 
+    // ── Get validation errors for display ──
+    const errors = useMemo(() => {
+        return {
+            subject: touched.subject ? validateField('subject', context.subject) : '',
+            topic: touched.topic ? validateField('topic', context.topic) : '',
+            className: touched.className ? validateField('class', context.className) : '',
+        };
+    }, [context, touched, validateField]);
+
     // ── Render ──
     return (
         <div style={{
@@ -112,7 +173,6 @@ function App() {
                     alignItems: 'center',
                     gap: 12,
                 }}>
-                    
                     OCR Demo Viewer
                 </h1>
                 <p style={{ color: '#666', margin: 0 }}>
@@ -132,13 +192,38 @@ function App() {
                 preview={preview}
             />
 
-            {/* Context Form */}
+            {/* Context Form — with validation */}
             <ContextForm
                 subject={context.subject}
                 topic={context.topic}
                 className={context.className}
                 onChange={handleContextChange}
+                errors={errors}
+                touched={touched}
             />
+
+            {/* Ground Truth Input
+            <div style={{ marginTop: 12 }}>
+                <label style={{ fontWeight: 500, fontSize: '0.9em', display: 'block', marginBottom: 4 }}>
+                    Ground Truth <span style={{ color: '#999', fontWeight: 'normal' }}>(optional — for comparison)</span>
+                </label>
+                <textarea
+                    value={truth}
+                    onChange={(e) => setTruth(e.target.value)}
+                    placeholder="Paste the expected text here..."
+                    style={{
+                        width: '100%',
+                        minHeight: '56px',
+                        padding: '10px',
+                        borderRadius: 4,
+                        border: '1px solid #ccc',
+                        fontSize: '0.95em',
+                        fontFamily: 'monospace',
+                        resize: 'vertical',
+                        boxSizing: 'border-box',
+                    }}
+                />
+            </div> */}
 
             {/* Actions */}
             <div style={{
@@ -150,20 +235,25 @@ function App() {
             }}>
                 <button
                     onClick={handleRecognize}
-                    disabled={loading || !file}
+                    disabled={loading || !file || !isFormValid()}
                     style={{
                         padding: '10px 24px',
                         borderRadius: 6,
                         border: 'none',
-                        backgroundColor: loading || !file ? '#ccc' : '#007bff',
-                        color: loading || !file ? '#888' : '#fff',
+                        backgroundColor: (loading || !file || !isFormValid()) ? '#ccc' : '#007bff',
+                        color: (loading || !file || !isFormValid()) ? '#888' : '#fff',
                         fontSize: '1em',
                         fontWeight: 600,
-                        cursor: loading || !file ? 'not-allowed' : 'pointer',
+                        cursor: (loading || !file || !isFormValid()) ? 'not-allowed' : 'pointer',
                         transition: 'background-color 0.2s',
                     }}
+                    title={
+                        !file ? 'Please select an image' :
+                        !isFormValid() ? 'Please fill in all context fields' :
+                        ''
+                    }
                 >
-                    {loading ? ' Recognizing...' : ' Recognize'}
+                    {loading ? 'Recognizing...' : 'Recognize'}
                 </button>
 
                 <button
@@ -181,6 +271,19 @@ function App() {
                 >
                     {healthLoading ? '...' : ' Check Breaker'}
                 </button>
+
+                {/* ── Status indicator ── */}
+                <span style={{
+                    fontSize: '0.8em',
+                    color: isFormValid() ? '#28a745' : '#dc3545',
+                    marginLeft: 'auto',
+                }}>
+                    {isFormValid() ? (
+                        'All fields filled'
+                    ) : (
+                        ' Fill all context fields'
+                    )}
+                </span>
             </div>
 
             {/* Error */}
@@ -193,7 +296,7 @@ function App() {
                     borderRadius: 4,
                     color: '#721c24',
                 }}>
-                     {error}
+                    Error {error}
                 </div>
             )}
 
@@ -222,7 +325,7 @@ function App() {
                 {' • '}
                 <span>Math: {result?.has_math ? ' yes' : ' no'}</span>
                 {' • '}
-                <span>Legible: {result?.legible ? 'yes' : 'no'}</span>
+                <span>Legible: {result?.legible ? ' yes' : ' no'}</span>
             </footer>
         </div>
     );
